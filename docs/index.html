@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>flightcheck — AI Quality Monitor</title>
+
+<!-- CX Agent Studio web widget -->
+<script defer src="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/chat-messenger.js"></script>
+<link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-default.css">
+<link rel="stylesheet" href="https://www.gstatic.com/chat-messenger/sdk/prod/v1.16/themes/chat-messenger-layout.css">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg:        #0a0c10;
+    --panel:     #11151c;
+    --panel-2:   #161b24;
+    --line:      #232a36;
+    --text:      #e6eaf0;
+    --muted:     #8b96a8;
+    --dim:       #5b6577;
+    --green:     #3ddc97;
+    --amber:     #ffb547;
+    --red:       #ff5d5d;
+    --accent:    #5b9dff;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Sora', sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  html, body { background: var(--bg); color: var(--text); font-family: var(--sans); }
+
+  body {
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(91,157,255,0.10), transparent),
+      linear-gradient(rgba(35,42,54,0.4) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(35,42,54,0.4) 1px, transparent 1px);
+    background-size: 100% 100%, 48px 48px, 48px 48px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
+
+  /* ---- top bar ---- */
+  .topbar {
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 22px 0; border-bottom: 1px solid var(--line);
+  }
+  .brand { display:flex; align-items:center; gap:11px; }
+  .brand .dot {
+    width:9px; height:9px; border-radius:50%; background:var(--green);
+    box-shadow:0 0 12px var(--green); animation: pulse 2.4s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+  .brand .name { font-weight:800; font-size:1.05rem; letter-spacing:-0.01em; }
+  .brand .name span { color: var(--dim); font-weight:400; }
+  .topbar .meta { font-family:var(--mono); font-size:.72rem; color:var(--dim); }
+
+  /* ---- hero ---- */
+  .hero { padding: 86px 0 60px; }
+  .tag {
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:var(--mono); font-size:.72rem; letter-spacing:.04em;
+    color:var(--accent); border:1px solid var(--line); border-radius:100px;
+    padding:6px 13px; margin-bottom:26px; text-transform:uppercase;
+  }
+  .tag::before { content:""; width:6px; height:6px; border-radius:50%; background:var(--accent); }
+
+  h1 {
+    font-size: clamp(2.6rem, 6vw, 4.4rem);
+    line-height: 1.04; font-weight: 800; letter-spacing: -0.035em;
+    max-width: 16ch;
+  }
+  h1 em { font-style:normal; color:var(--dim); }
+  .lead {
+    margin-top: 24px; max-width: 56ch;
+    font-size: 1.12rem; line-height: 1.6; color: var(--muted); font-weight:300;
+  }
+  .cta-row { margin-top:34px; display:flex; gap:14px; flex-wrap:wrap; }
+  .btn {
+    font-family:var(--mono); font-size:.82rem; text-decoration:none;
+    padding:13px 22px; border-radius:8px; border:1px solid var(--line);
+    color:var(--text); transition:.18s; cursor:pointer;
+  }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#06080d; font-weight:700; }
+  .btn.primary:hover { filter:brightness(1.12); transform:translateY(-2px); }
+  .btn.ghost:hover { border-color:var(--accent); color:var(--accent); }
+
+  /* ---- pipeline ---- */
+  .section-label {
+    font-family:var(--mono); font-size:.72rem; letter-spacing:.12em;
+    color:var(--dim); text-transform:uppercase; margin-bottom:22px;
+    display:flex; align-items:center; gap:12px;
+  }
+  .section-label::after { content:""; flex:1; height:1px; background:var(--line); }
+
+  .pipe { padding: 30px 0 70px; }
+  .flow {
+    display:grid; grid-template-columns: repeat(5, 1fr); gap:10px;
+  }
+  .node {
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:18px 14px; position:relative;
+  }
+  .node .n { font-family:var(--mono); font-size:.68rem; color:var(--dim); }
+  .node .t { margin-top:9px; font-weight:600; font-size:.92rem; }
+  .node .d { margin-top:6px; font-size:.78rem; color:var(--muted); line-height:1.45; }
+  .node.last { border-color:rgba(61,220,151,0.35); }
+  .node.last .t { color:var(--green); }
+  @media (max-width:780px){ .flow{ grid-template-columns:1fr 1fr; } }
+
+  /* ---- features ---- */
+  .feats { padding: 20px 0 70px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+  @media (max-width:780px){ .feats{ grid-template-columns:1fr; } }
+  .feat {
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    border:1px solid var(--line); border-radius:12px; padding:24px;
+  }
+  .feat .ico { font-family:var(--mono); font-size:.78rem; color:var(--accent); margin-bottom:14px; }
+  .feat h3 { font-size:1.04rem; font-weight:600; margin-bottom:8px; }
+  .feat p { font-size:.86rem; color:var(--muted); line-height:1.55; }
+
+  /* ---- live console ---- */
+  .console { padding: 20px 0 90px; }
+  .console-card {
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:14px; overflow:hidden;
+  }
+  .console-head {
+    display:flex; align-items:center; gap:10px;
+    padding:14px 18px; border-bottom:1px solid var(--line);
+    font-family:var(--mono); font-size:.78rem; color:var(--muted);
+  }
+  .console-head .lights { display:flex; gap:6px; }
+  .console-head .lights i { width:9px; height:9px; border-radius:50%; display:block; }
+  .console-body { padding:24px; }
+  .console-hint {
+    font-size:.84rem; color:var(--dim); margin-bottom:18px; line-height:1.55;
+    font-family:var(--mono);
+  }
+  .console-hint b { color:var(--amber); font-weight:400; }
+
+  /* widget sizing */
+  chat-messenger { --chat-container-height: 560px; }
+  .widget-mount {
+    border:1px dashed var(--line); border-radius:10px;
+    min-height:560px; display:flex; align-items:stretch;
+  }
+
+  /* ---- footer ---- */
+  footer {
+    border-top:1px solid var(--line); padding:28px 0;
+    font-family:var(--mono); font-size:.74rem; color:var(--dim);
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;
+  }
+  footer a { color:var(--muted); text-decoration:none; }
+  footer a:hover { color:var(--accent); }
+
+  .reveal { opacity:0; transform:translateY(16px); animation:rise .7s forwards; }
+  @keyframes rise { to { opacity:1; transform:none; } }
+  .d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.25s}
+  .d4{animation-delay:.35s}.d5{animation-delay:.45s}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="dot"></span>
+      <span class="name">flightcheck<span> / ai quality monitor</span></span>
+    </div>
+    <div class="meta">STATUS: OPERATIONAL</div>
+  </div>
+
+  <section class="hero">
+    <div class="tag reveal d1">Google Cloud Rapid Agent Hackathon · Arize Track</div>
+    <h1 class="reveal d2">An agent that watches your other agents. <em>And acts.</em></h1>
+    <p class="lead reveal d3">
+      flightcheck is an autonomous monitoring agent. It inspects a live LLM
+      application through the Arize Phoenix observability platform, detects when
+      output quality degrades, and files a real alert — no human in the loop.
+    </p>
+    <div class="cta-row reveal d4">
+      <a class="btn primary" href="#live">Try the live agent ↓</a>
+      <a class="btn ghost" href="https://github.com/divergent99/flightcheck" target="_blank">View source</a>
+    </div>
+  </section>
+
+  <section class="pipe">
+    <div class="section-label">How it works</div>
+    <div class="flow">
+      <div class="node reveal d1">
+        <div class="n">01</div><div class="t">patient-app</div>
+        <div class="d">A monitored LLM app emits traces of every call.</div>
+      </div>
+      <div class="node reveal d2">
+        <div class="n">02</div><div class="t">Arize Phoenix</div>
+        <div class="d">Traces land in the Phoenix observability platform.</div>
+      </div>
+      <div class="node reveal d3">
+        <div class="n">03</div><div class="t">MCP server</div>
+        <div class="d">A custom MCP server on Cloud Run exposes the trace data.</div>
+      </div>
+      <div class="node reveal d4">
+        <div class="n">04</div><div class="t">flightcheck agent</div>
+        <div class="d">A Gemini agent reads traces, reasons, judges quality.</div>
+      </div>
+      <div class="node last reveal d5">
+        <div class="n">05</div><div class="t">Discord alert</div>
+        <div class="d">If quality is degraded, an alert is filed automatically.</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="feats">
+    <div class="feat reveal d1">
+      <div class="ico">// MULTI-STEP</div>
+      <h3>Plans a real mission</h3>
+      <p>On every check it sequences multiple tool calls — stats, traces, judgment, action — not a single canned reply.</p>
+    </div>
+    <div class="feat reveal d2">
+      <div class="ico">// MCP-NATIVE</div>
+      <h3>Powered by Arize Phoenix</h3>
+      <p>A purpose-built Model Context Protocol server wraps the Arize Phoenix client and gives the agent its observability superpowers.</p>
+    </div>
+    <div class="feat reveal d3">
+      <div class="ico">// BEYOND CHAT</div>
+      <h3>Takes action, not notes</h3>
+      <p>When it finds degraded quality, flightcheck files a severity-tagged alert to the team — autonomously.</p>
+    </div>
+  </section>
+
+  <section class="console" id="live">
+    <div class="section-label">Live agent</div>
+    <div class="console-card reveal d1">
+      <div class="console-head">
+        <span class="lights">
+          <i style="background:var(--red)"></i>
+          <i style="background:var(--amber)"></i>
+          <i style="background:var(--green)"></i>
+        </span>
+        flightcheck@cx-agent-studio — interactive session
+      </div>
+      <div class="console-body">
+        <div class="console-hint">
+          &gt; Try: <b>"Check the patient-app and take action if anything looks wrong."</b><br>
+          &gt; The agent will inspect Phoenix, judge quality, and file an alert if needed.
+        </div>
+        <div class="widget-mount">
+          <!-- CX Agent Studio widget -->
+          <chat-messenger url-allowlist="*" color-scheme="dark" style="width:100%">
+            <chat-messenger-container
+              chat-title="flightcheck — AI Quality Monitor"
+              chat-title-icon="https://gstatic.com/dialogflow-console/common/assets/ccai-favicons/conversational_agents.png"
+              enable-file-upload>
+              <chat-reset-session-button slot="titlebar-actions" title-text="Start new chat"></chat-reset-session-button>
+              <chat-toggle-dialog-button slot="titlebar-actions" title-text-expanded="Collapse" title-text-collapsed="Expand"></chat-toggle-dialog-button>
+            </chat-messenger-container>
+          </chat-messenger>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>flightcheck · built with Gemini + Google Cloud Agent Builder + Arize Phoenix</span>
+    <span><a href="https://github.com/divergent99/flightcheck" target="_blank">github.com/divergent99/flightcheck</a></span>
+  </footer>
+
+</div>
+
+<script>
+  window.addEventListener("chat-messenger-loaded", () => {
+    chatSdk.registerContext(
+      chatSdk.prebuilts.ces.createContext({
+        deploymentName: "projects/790279690106/locations/us/apps/dd3443f5-2f69-4378-b9c8-c8e5456aefca/deployments/009d5a6a-4d56-4674-89ab-7ee2302eeab1",
+        tokenBroker: { enableTokenBroker: true, enableRecaptcha: false }
+      }),
+    );
+  });
+</script>
+
+</body>
+</html>
