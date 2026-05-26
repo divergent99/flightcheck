@@ -1,0 +1,5 @@
+fastmcp
+arize-phoenix-client
+python-dotenv
+pandas
+httpx
