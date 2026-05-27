@@ -14,20 +14,69 @@ phoenix = Client(base_url=PHOENIX_ENDPOINT, api_key=PHOENIX_API_KEY)
 
 mcp = FastMCP("flightcheck-phoenix")
 
+@mcp.tool()
+def debug_columns(project_name: str = "valorant-lineup") -> str:
+    """Debug: list all column names in the spans dataframe."""
+    df = phoenix.spans.get_spans_dataframe(project_identifier=project_name, limit=2)
+    if df is None or len(df) == 0:
+        return "No data."
+    return "COLUMNS:\n" + "\n".join(list(df.columns))
 
 @mcp.tool()
-def get_recent_traces(project_name: str = "patient-app", limit: int = 10) -> str:
-    """Get recent traces (input/output pairs) from a Phoenix project for quality review."""
-    df = phoenix.spans.get_spans_dataframe(project_identifier=project_name, limit=limit)
+def debug_messages(project_name: str = "valorant-lineup") -> str:
+    """Debug: show raw structure of the llm message columns."""
+    df = phoenix.spans.get_spans_dataframe(project_identifier=project_name, limit=20)
+    if df is None or len(df) == 0:
+        return "No data."
+    if "span_kind" in df.columns:
+        df = df[df["span_kind"].astype(str).str.upper() == "LLM"]
+    if len(df) == 0:
+        return "No LLM spans."
+    row = df.iloc[0]
+    out = []
+    for col in ["attributes.llm.input_messages", "attributes.llm.output_messages",
+                "attributes.input.value", "attributes.output.value"]:
+        val = row.get(col)
+        out.append(f"=== {col} ===\ntype={type(val).__name__}\nrepr={repr(val)[:600]}\n")
+    return "\n".join(out)
+
+@mcp.tool()
+def get_recent_traces(project_name: str = "valorant-lineup", limit: int = 10) -> str:
+    """Get recent traces (user question + assistant answer) from a Phoenix project for quality review."""
+    df = phoenix.spans.get_spans_dataframe(project_identifier=project_name, limit=limit * 4)
     if df is None or len(df) == 0:
         return f"No traces found in project '{project_name}'."
+
+    # keep only LLM spans (drop HTTP / plumbing spans)
+    if "span_kind" in df.columns:
+        df = df[df["span_kind"].astype(str).str.upper() == "LLM"]
+    if len(df) == 0:
+        return f"No LLM traces found in project '{project_name}'."
+
+    df = df.head(limit)
+
+    def extract_text(val):
+        try:
+            if isinstance(val, (list, tuple)) and len(val):
+                parts = []
+                for m in val:
+                    if isinstance(m, dict):
+                        role = m.get("message.role", "")
+                        content = m.get("message.content", "")
+                        # skip the long system prompt; keep user + model turns
+                        if content and role != "system":
+                            parts.append(str(content))
+                return " ".join(parts)
+        except Exception:
+            pass
+        return ""
+
     lines = []
     for _, row in df.iterrows():
-        inp = str(row.get("attributes.input.value", ""))[:200]
-        out = str(row.get("attributes.output.value", ""))[:400]
-        lines.append(f"INPUT: {inp}\nOUTPUT: {out}\n---")
+        inp = extract_text(row.get("attributes.llm.input_messages"))[:300]
+        out = extract_text(row.get("attributes.llm.output_messages"))[:500]
+        lines.append(f"USER: {inp}\nASSISTANT: {out}\n---")
     return "\n".join(lines)
-
 
 @mcp.tool()
 def get_project_stats(project_name: str = "patient-app") -> str:

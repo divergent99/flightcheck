@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+google-genai
+arize-phoenix-otel
+openinference-instrumentation-google-genai
+python-dotenv
+tavily-python
