@@ -1,36 +1,88 @@
 ## flightcheck
 
-An AI agent that monitors the quality of other AI applications — and takes action when it spots a problem.
+**An autonomous AI agent that monitors other AI applications — and takes action when their quality degrades.**
 
-Built for the Google Cloud Rapid Agent Hackathon (Arize track).
+Built for the Google Cloud Rapid Agent Hackathon · Arize Track.
+
+---
+
+## The problem
+
+LLM applications fail silently. A prompt change ships, a model goes stale on
+new information, an answer quietly gets vague — and nobody notices until users
+complain. Observability platforms collect the traces, but someone still has to
+*look* at them.
+
+**flightcheck** is that someone — an agent instead of a person.
 
 ## What it does
 
-flightcheck is an autonomous agent that watches a target LLM application ("patient-app"). It inspects observability data, detects when output quality has degraded, and files an alert to a team Discord channel — without a human in the loop.
+flightcheck monitors a real, live LLM application and runs an autonomous
+quality-check loop on demand:
 
-It runs a multi-step mission on every check:
-1. Pull project stats from the Arize Phoenix observability platform.
-2. Pull recent traces (input/output pairs).
-3. Reason over the outputs to detect degraded quality (vague, evasive, or factually empty answers).
-4. If quality is degraded, file a severity-tagged alert to Discord.
-5. Report a concise verdict.
+1. Pulls project stats from the **Arize Phoenix** observability platform.
+2. Pulls recent traces — the actual user questions and assistant answers.
+3. Reasons over the answers to judge quality: are they specific and helpful,
+   or vague, evasive, and degraded?
+4. If quality has degraded, **files a severity-tagged alert to a Discord
+   channel** — autonomously, no human in the loop.
+5. Reports a clear verdict.
+
+It is a true agent: it plans a multi-step mission, calls tools, and **takes a
+real action** — it doesn't just chat.
+
+## The monitored app — "Lineup"
+
+To monitor something real, this project includes a real application:
+**Lineup**, a Valorant strategy coach chatbot. Lineup answers tactical
+questions (agent comps, site executes, ability lineups), uses live web search
+to stay current on new agents and maps, and emits a trace to Phoenix on every
+message. flightcheck watches Lineup the same way it would watch any production
+LLM app.
 
 ## Architecture
 
-- **Agent** — built in Google Cloud Agent Builder (CX Agent Studio), powered by Gemini.
-- **MCP server** — a custom Model Context Protocol server (FastMCP, Python) deployed on Google Cloud Run. It wraps the Arize Phoenix client and exposes three tools: `get_recent_traces`, `get_project_stats`, and `file_quality_alert`.
-- **Observability** — Arize Phoenix stores traces emitted by the monitored app.
-- **Action** — `file_quality_alert` posts to a Discord webhook.
-
 ```
-patient-app  ->  Arize Phoenix  ->  flightcheck MCP server (Cloud Run)  ->  flightcheck agent (Gemini)  ->  Discord alert
+  Lineup chatbot (Gemini + Tavily web search)
+        │  every conversation traced
+        ▼
+  Arize Phoenix  ── observability / trace storage
+        │
+        ▼
+  flightcheck MCP server (FastMCP, on Cloud Run)
+        │  exposes trace-reading + alerting tools over MCP
+        ▼
+  flightcheck agent (Gemini, Google Cloud Agent Builder)
+        │  plans · inspects · judges · acts
+        ▼
+  Discord alert  ── autonomous notification when quality degrades
 ```
 
 ## Tech stack
 
-Gemini, Google Cloud Agent Builder, Google Cloud Run, Arize Phoenix, FastMCP, Python.
+- **Gemini** — powers both the flightcheck agent and the Lineup chatbot
+- **Google Cloud Agent Builder (CX Agent Studio)** — hosts the flightcheck agent
+- **Model Context Protocol (MCP)** — a custom FastMCP server bridges the agent
+  and Arize Phoenix
+- **Arize Phoenix** — observability platform storing the monitored app's traces
+- **Google Cloud Run** — hosts the MCP server and the Lineup backend
+- **Tavily** — live web search, keeping Lineup current
+- **Discord** — receives autonomous quality alerts
 
-## Running the MCP server
+## Live links
+
+- **flightcheck** (the monitoring agent): https://divergent99.github.io/flightcheck/
+- **Lineup** (the monitored chatbot): https://divergent99.github.io/flightcheck/lineup.html
+
+## Repository layout
+
+- `server.py` — the flightcheck MCP server: exposes `get_recent_traces`,
+  `get_project_stats`, and `file_quality_alert` tools to the agent
+- `lineup-bot/` — the Lineup chatbot backend (FastAPI, Gemini, Tavily, Phoenix tracing)
+- `docs/` — the hosted front-ends (`index.html`, `lineup.html`)
+- `Dockerfile`, `requirements.txt` — deployment for the MCP server
+
+## Running the MCP server locally
 
 1. Copy `.env.example` to `.env` and fill in your values.
 2. `pip install -r requirements.txt`
